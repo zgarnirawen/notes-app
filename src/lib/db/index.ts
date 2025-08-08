@@ -8,7 +8,8 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is missing");
 }
 
-// Utilisation de ReturnType pour le typage exact
-const sql = neon(connectionString) as ReturnType<typeof neon>;
+const sql = neon(connectionString);
 
 export const db = drizzle(sql, { schema });
+
+export { schema };

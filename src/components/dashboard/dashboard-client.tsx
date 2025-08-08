@@ -1,23 +1,40 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import SearchNotes from "@/components/notes/search-notes";
 import { formatRelativeDate, truncateText } from "@/lib/utils";
 import { PenTool, Plus, FileText } from "lucide-react";
-import type { Note } from "@/lib/db/schema";
-import type { User } from "@clerk/nextjs/server";
+
+interface Note {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface DashboardClientProps {
-  user: User | null;
+  userId: string;
   notes: Note[];
 }
 
-export default function DashboardClient({ user, notes }: DashboardClientProps) {
-  const [filteredNotes, setFilteredNotes] = useState<Note[]>(notes);
+export default function DashboardClient({ userId, notes }: DashboardClientProps) {
+  // Memoize parsedNotes so it's not recalculated on every render
+  const parsedNotes = useMemo(() => {
+    return notes.map(note => ({
+      ...note,
+      createdAt: new Date(note.createdAt),
+      updatedAt: new Date(note.updatedAt),
+    }));
+  }, [notes]);
 
-  const handleFilteredNotes = useCallback((filtered: Note[]) => {
+  // Initialize filteredNotes once with parsedNotes
+  const [filteredNotes, setFilteredNotes] = useState(parsedNotes);
+
+  const handleFilteredNotes = useCallback((filtered: typeof parsedNotes) => {
     setFilteredNotes(filtered);
   }, []);
 
@@ -27,7 +44,7 @@ export default function DashboardClient({ user, notes }: DashboardClientProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Bonjour, {user?.firstName || "Utilisateur"} 👋
+            Bonjour, utilisateur {userId} 👋
           </h1>
           <p className="text-gray-600 mt-1">
             Vous avez {notes.length} note{notes.length !== 1 ? 's' : ''} enregistrée{notes.length !== 1 ? 's' : ''}
@@ -44,7 +61,7 @@ export default function DashboardClient({ user, notes }: DashboardClientProps) {
       {/* Search Bar */}
       {notes.length > 0 && (
         <div className="max-w-md">
-          <SearchNotes notes={notes} onFilteredNotes={handleFilteredNotes} />
+          <SearchNotes notes={parsedNotes} onFilteredNotes={handleFilteredNotes} />
         </div>
       )}
 
@@ -66,7 +83,7 @@ export default function DashboardClient({ user, notes }: DashboardClientProps) {
   );
 }
 
-function NoteCard({ note }: { note: Note }) {
+function NoteCard({ note }: { note: Omit<Note, "createdAt" | "updatedAt"> & { createdAt: Date; updatedAt: Date } }) {
   return (
     <Link href={`/dashboard/notes/${note.id}`}>
       <div className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group">
@@ -76,11 +93,11 @@ function NoteCard({ note }: { note: Note }) {
           </h3>
           <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
         </div>
-        
+
         <p className="text-gray-600 text-sm mb-4 line-clamp-3">
           {truncateText(note.content, 120)}
         </p>
-        
+
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Modifiée {formatRelativeDate(note.updatedAt)}</span>
           <span className="text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">

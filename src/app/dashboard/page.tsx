@@ -1,67 +1,29 @@
-import { getUserNotes } from "@/lib/actions/notes";
-import { currentUser } from "@clerk/nextjs/server";
-import DashboardClient from "@/components/dashboard/dashboard-client";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { FileText, PenTool, Plus } from "lucide-react";
-import { truncateText, formatRelativeDate } from "@/lib/utils";
+import { getAuth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
+import { db } from "../../lib/db";
+import * as schema from "../../lib/db/schema";
+import { eq } from "drizzle-orm";
+import DashboardClient from "../../components/dashboard/dashboard-client";
 
 export default async function DashboardPage() {
-  const user = await currentUser();
-  const notes = await getUserNotes();
+  const headersList = headers();
+  const req = new Request("http://localhost", { headers: headersList });
 
-  return (
-    <DashboardClient 
-      user={user} 
-      notes={notes} 
-    />
-  );
-}
+  // Cast en any pour éviter l'erreur TS (non idéal, mais fonctionnel)
+  const { userId } = getAuth(req as any);
 
-function NoteCard({ note }: { note: any }) {
-  return (
-    <Link href={`/dashboard/notes/${note.id}`}>
-      <div className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group">
-        <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-            {truncateText(note.title, 50)}
-          </h3>
-          <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-        </div>
-        
-        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-          {truncateText(note.content, 120)}
-        </p>
-        
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>Modifiée {formatRelativeDate(note.updatedAt)}</span>
-          <span className="text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-            Voir →
-          </span>
-        </div>
-      </div>
-    </Link>
-  );
-}
+  if (!userId) {
+    return <div>You are not logged in</div>;
+  }
 
-function EmptyState() {
-  return (
-    <div className="text-center py-16">
-      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <PenTool className="h-8 w-8 text-gray-400" />
-      </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">
-        Aucune note pour le moment
-      </h3>
-      <p className="text-gray-600 mb-6 max-w-sm mx-auto">
-        Commencez par créer votre première note pour organiser vos idées et vos pensées.
-      </p>
-      <Link href="/dashboard/notes/new">
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Créer ma première note
-        </Button>
-      </Link>
-    </div>
-  );
+  const userNotesRaw = await db.select().from(schema.notes).where(eq(schema.notes.userId, userId));
+
+  // Convertir Date -> string pour la compatibilité avec DashboardClient
+  const userNotes = userNotesRaw.map(note => ({
+    ...note,
+    createdAt: note.createdAt.toISOString(),
+    updatedAt: note.updatedAt.toISOString(),
+  }));
+
+  return <DashboardClient userId={userId} notes={userNotes} />;
 }
